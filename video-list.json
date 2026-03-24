@@ -1,0 +1,22 @@
+{
+  "videos": [
+    {
+      "id": 1,
+      "url": "https://ton-lien-video1.mp4",
+      "thumbnail": "https://ton-lien-image1.jpg",
+      "user": "pseudo_user1",
+      "description": "Ma première vidéo trop stylée ! 🔥",
+      "likes": 1243,
+      "comments": 89
+    },
+    {
+      "id": 2,
+      "url": "https://ton-lien-video2.mp4",
+      "thumbnail": "https://ton-lien-image2.jpg",
+      "user": "pseudo_user2",
+      "description": "Regardez ça les amis ✨",
+      "likes": 5621,
+      "comments": 234
+    }
+  ]
+}
