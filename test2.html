@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🎬 VideoFlow Infini</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #000;
+            color: white;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* Conteneur principal */
+        #video-feed {
+            height: 100vh;
+            overflow-y: scroll;
+            scroll-snap-type: y mandatory;
+            scroll-behavior: smooth;
+            position: relative;
+        }
+
+        /* Chaque vidéo = plein écran */
+        .video-card {
+            height: 100vh;
+            width: 100vw;
+            scroll-snap-align: start;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #111;
+            overflow: hidden;
+        }
+
+        /* Vidéo */
+        .video-player {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        /* Overlay gradient */
+        .video-overlay {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 40%;
+            background: linear-gradient(to top, rgba(0,0,0,0.9), transparent);
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        /* Infos vidéo */
+        .video-info {
+            position: absolute;
+            bottom: 80px;
+            left: 15px;
+            right: 70px;
+            z-index: 3;
+            pointer-events: none;
+        }
+
+        .video-user {
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #f09433, #bc1888);
+            border: 2px solid white;
+        }
+
+        .video-desc {
+            font-size: 0.95rem;
+            opacity: 0.95;
+            line-height: 1.3;
+        }
+
+        .video-stats {
+            margin-top: 8px;
+            font-size: 0.85rem;
+            opacity: 0.8;
+        }
+
+        /* Boutons d'action (droite) */
+        .actions-panel {
+            position: absolute;
+            right: 10px;
+            bottom: 100px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 25px;
+            z-index: 3;
+        }
+
+        .action-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.8rem;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            transition: transform 0.1s;
+            pointer-events: auto;
+        }
+
+        .action-btn:active { transform: scale(0.85); }
+        .action-btn.liked { color: #ff3040; }
+        .action-count { font-size: 0.75rem; font-weight: 500; }
+
+        /* Animation secousse */
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            25% { transform: translate(-2px, -1px) rotate(-1deg); }
+            50% { transform: translate(2px, 1px) rotate(1deg); }
+            75% { transform: translate(-1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -1px) rotate(-1deg); }
+        }
+        .shaking { animation: shake 0.25s ease-in-out; }
+
+        /* Étoiles magiques */
+        .magic-star {
+            position: fixed;
+            font-size: 24px;
+            pointer-events: none;
+            animation: starFly 1s ease-out forwards;
+            z-index: 1000;
+            opacity: 0;
+        }
+        @keyframes starFly {
+            0% { transform: translate(0, 0) scale(0.3); opacity: 1; }
+            100% { transform: translate(var(--tx), var(--ty)) scale(1.8); opacity: 0; }
+        }
+
+        /* Loader infini */
+        .infinite-loader {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 0.9rem;
+            opacity: 0.7;
+            z-index: 10;
+            display: none;
+        }
+        .infinite-loader.active { display: block; }
+
+        /* Play/Pause overlay */
+        .play-pause-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 4rem;
+            color: white;
+            opacity: 0;
+            transition: opacity 0.2s;
+            pointer-events: none;
+            z-index: 5;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+        .video-card.paused .play-pause-overlay { opacity: 0.8; }
+
+        /* Barre de progression */
+        .progress-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            background: white;
+            width: 0%;
+            transition: width 0.1s linear;
+            z-index: 4;
+        }
+
+        /* Message d'erreur */
+        .error-msg {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            padding: 20px;
+            background: rgba(255,50,50,0.2);
+            border-radius: 12px;
+            max-width: 80%;
+        }
+	        .bottom-nav {
+            margin-top: auto;
+            border-top: 1px solid #333;
+            padding: 15px;
+            display: flex;
+            justify-content: space-around;
+            background: #000;
+        }
+
+        .nav-item {
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        .nav-item.active {
+            color: #bc1888;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="video-feed">
+        <!-- Les vidéos seront injectées ici par JavaScript -->
+    </div>
+
+    <div class="infinite-loader" id="loader">✨ Chargement de nouvelles vidéos...</div>
+		        <div class="bottom-nav">
+            <div class="nav-item active" onclick="triggerMagic(this, event)">🏠</div>
+            <div class="nav-item" onclick="triggerMagic(this, event)">🔍</div>
+            <div class="nav-item" onclick="triggerMagic(this, event)">🎬</div>
+            <div class="nav-item" onclick="triggerMagic(this, event)">🛍️</div>
+            <div class="nav-item" onclick="triggerMagic(this, event)">👤</div>
+        </div>
+
+    <script>
+        // ⚙️ CONFIGURATION - À MODIFIER SELON TON SITE
+        const CONFIG = {
+            // URL de ta liste de vidéos JSON (quand ton site sera prêt)
+            videoListUrl: 'https://gameblack66.github.io/Video-List/video-list.json',
+            
+            // Mode démo : utilise des vidéos d'exemple si l'URL ne fonctionne pas
+            demoMode: true,
+            
+            // Vidéos de démo (remplace-les par les tiennes !)
+            demoVideos: [
+                {
+                    id: 1,
+                    url: 'https://assets.mixkit.co/videos/preview/mixkit-winter-fashion-show-40018-large.mp4',
+                    thumbnail: '',
+                    user: 'fashion_daily',
+                    description: 'Look d\'hiver trop chaud 🔥❄️ #mode #style',
+                    likes: 2341,
+                    comments: 156
+                },
+                {
+                    id: 2,
+                    url: 'https://assets.mixkit.co/videos/preview/mixkit-tree-with-yellow-flowers-1173-large.mp4',
+                    thumbnail: '',
+                    user: 'nature_lover',
+                    description: 'Le printemps arrive 🌸✨ #nature #peace',
+                    likes: 8921,
+                    comments: 432
+                },
+                {
+                    id: 3,
+                    url: 'https://assets.mixkit.co/videos/preview/mixkit-spinning-around-the-sun-1489-large.mp4',
+                    thumbnail: '',
+                    user: 'space_explorer',
+                    description: 'Voyage interstellaire 🚀🌌 #space #cosmos',
+                    likes: 15672,
+                    comments: 891
+                },
+                {
+                    id: 4,
+                    url: 'https://assets.mixkit.co/videos/preview/mixkit-sea-waves-at-sunset-1162-large.mp4',
+                    thumbnail: '',
+                    user: 'ocean_vibes',
+                    description: 'Le coucher de soleil parfait 🌅🌊 #ocean #sunset',
+                    likes: 6543,
+                    comments: 287
+                }
+            ],
+            
+            // Nombre de vidéos à charger par lot (pour l'infini)
+            batchSize: 4
+        };
+
+        // 🧠 État de l'application
+        let allVideos = [];
+        let currentIndex = 0;
+        let isLoading = false;
+        let observer = null;
+
+        // 🎯 Initialisation
+        document.addEventListener('DOMContentLoaded', async () => {
+            await loadVideos();
+            setupInfiniteScroll();
+            setupTouchGestures();
+            
+            // Auto-play de la première vidéo visible
+            setTimeout(updateVisibleVideo, 300);
+        });
+
+        // 📥 Charger les vidéos (depuis JSON ou démo)
+        async function loadVideos() {
+            try {
+                if (CONFIG.demoMode) {
+                    allVideos = [...CONFIG.demoVideos];
+                    renderVideos(0, CONFIG.batchSize);
+                    return;
+                }
+
+                const response = await fetch(CONFIG.videoListUrl);
+                if (!response.ok) throw new Error('Network error');
+                
+                const data = await response.json();
+                allVideos = data.videos || [];
+                renderVideos(0, CONFIG.batchSize);
+                
+            } catch (error) {
+                console.warn('⚠️ Fallback en mode démo:', error.message);
+                allVideos = [...CONFIG.demoVideos];
+                renderVideos(0, CONFIG.batchSize);
+                
+                // Afficher un message gentil
+                const feed = document.getElementById('video-feed');
+                feed.innerHTML = `
+                    <div class="error-msg">
+                        <h3>🎬 Mode Démo Activé</h3>
+                        <p style="margin-top:10px;font-size:0.9rem;opacity:0.9">
+                            Ton fichier JSON n'est pas encore disponible.<br>
+                            <strong>Crée :</strong><br>
+                            <code style="background:#333;padding:4px 8px;border-radius:4px;margin:5px 0;display:block">
+                                /Video-List/video-list.json
+                            </code>
+                        </p>
+                    </div>
+                ` + feed.innerHTML;
+            }
+        }
+
+        // 🎨 Renderer les vidéos dans le DOM
+        function renderVideos(startIndex, count) {
+            const feed = document.getElementById('video-feed');
+            const videosToRender = allVideos.slice(startIndex, startIndex + count);
+
+            videosToRender.forEach((video, index) => {
+                const card = document.createElement('div');
+                card.className = 'video-card';
+                card.dataset.index = startIndex + index;
+                card.dataset.videoId = video.id;
+                
+                card.innerHTML = `
+                    <video class="video-player" 
+                           src="${video.url}" 
+                           loop 
+                           playsinline 
+                           preload="metadata"
+                           poster="${video.thumbnail || ''}">
+                    </video>
+                    
+                    <div class="play-pause-overlay">▶️</div>
+                    <div class="progress-bar"></div>
+                    
+                    <div class="video-overlay"></div>
+                    
+                    <div class="video-info">
+                        <div class="video-user">
+                            <div class="avatar"></div>
+                            @${video.user}
+                        </div>
+                        <div class="video-desc">${video.description}</div>
+                        <div class="video-stats">
+                            ❤️ ${formatNumber(video.likes)} &nbsp; 💬 ${formatNumber(video.comments)}
+                        </div>
+                    </div>
+                    
+                    <div class="actions-panel">
+                        <button class="action-btn heart-btn" data-action="like">
+                            ❤️ <span class="action-count">${formatNumber(video.likes)}</span>
+                        </button>
+                        <button class="action-btn" data-action="comment">💬</button>
+                        <button class="action-btn" data-action="share">🚀</button>
+                        <button class="action-btn" data-action="save">🔖</button>
+                    </div>
+                `;
+                
+                feed.appendChild(card);
+                setupVideoInteractions(card);
+            });
+        }
+
+        // 🔄 Scroll infini intelligent
+        function setupInfiniteScroll() {
+            observer = new IntersectionObserver((entries) => {
+                const lastEntry = entries[entries.length - 1];
+                
+                if (lastEntry.isIntersecting && !isLoading) {
+                    loadMoreVideos();
+                }
+            }, { rootMargin: '200px' });
+
+            // Observer le dernier élément
+            updateObserver();
+        }
+
+        function updateObserver() {
+            const cards = document.querySelectorAll('.video-card');
+            if (cards.length > 0) {
+                observer.observe(cards[cards.length - 1]);
+            }
+        }
+
+        async function loadMoreVideos() {
+            if (isLoading || currentIndex + CONFIG.batchSize >= allVideos.length) {
+                // Si on a tout chargé, on boucle (optionnel)
+                if (currentIndex >= allVideos.length) {
+                    currentIndex = 0; // Boucle infinie !
+                }
+                return;
+            }
+
+            isLoading = true;
+            document.getElementById('loader').classList.add('active');
+            
+            // Simulation de chargement réseau (retire ce setTimeout en prod)
+            await new Promise(resolve => setTimeout(resolve, 800));
+            
+            const nextIndex = currentIndex + CONFIG.batchSize;
+            renderVideos(nextIndex, CONFIG.batchSize);
+            currentIndex = nextIndex;
+            
+            isLoading = false;
+            document.getElementById('loader').classList.remove('active');
+            updateObserver();
+        }
+
+        // 👆 Interactions tactiles & vidéo
+        function setupVideoInteractions(card) {
+            const video = card.querySelector('.video-player');
+            const progressBar = card.querySelector('.progress-bar');
+            const overlay = card.querySelector('.play-pause-overlay');
+            
+            // Play/Pause au clic
+            card.addEventListener('click', (e) => {
+                // Ignorer si on clique sur un bouton d'action
+                if (e.target.closest('.action-btn')) return;
+                
+                if (video.paused) {
+                    video.play().catch(() => {});
+                    card.classList.remove('paused');
+                    triggerMagic(e.target, e);
+                } else {
+                    video.pause();
+                    card.classList.add('paused');
+                }
+            });
+
+            // Double-clic pour liker
+            let lastTap = 0;
+            card.addEventListener('touchend', (e) => {
+                const now = Date.now();
+                if (now - lastTap < 300) {
+                    // Double tap !
+                    const heartBtn = card.querySelector('.heart-btn');
+                    if (!heartBtn.classList.contains('liked')) {
+                        heartBtn.click();
+                        createStars(e.touches?.[0]?.clientX || e.clientX, 
+                                 e.touches?.[0]?.clientY || e.clientY, '#ff3040');
+                    }
+                }
+                lastTap = now;
+            });
+
+            // Mise à jour de la barre de progression
+            video.addEventListener('timeupdate', () => {
+                if (video.duration) {
+                    const progress = (video.currentTime / video.duration) * 100;
+                    progressBar.style.width = `${progress}%`;
+                }
+            });
+
+            // Rejouer à la fin
+            video.addEventListener('ended', () => {
+                video.currentTime = 0;
+                video.play().catch(() => {});
+            });
+
+            // Boutons d'action
+            card.querySelectorAll('.action-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    handleAction(btn, card, video);
+                });
+            });
+        }
+
+        // ⚡ Gestion des actions (like, comment, etc.)
+        function handleAction(btn, card, video) {
+            const action = btn.dataset.action;
+            
+            // Vibration haptique
+            if (navigator.vibrate) navigator.vibrate(40);
+            btn.classList.add('shaking');
+            setTimeout(() => btn.classList.remove('shaking'), 200);
+
+            switch(action) {
+                case 'like':
+                    btn.classList.toggle('liked');
+                    const countSpan = btn.querySelector('.action-count');
+                    let count = parseInt(countSpan.textContent.replace(/[^0-9]/g, '')) || 0;
+                    countSpan.textContent = formatNumber(btn.classList.contains('liked') ? count + 1 : count - 1);
+                    
+                    if (btn.classList.contains('liked')) {
+                        createStars(btn.getBoundingClientRect().left + 20, 
+                                 btn.getBoundingClientRect().top, '#ff3040');
+                        if (navigator.vibrate) navigator.vibrate([30, 50, 30]);
+                    }
+                    break;
+                    
+                case 'comment':
+                    createStars(btn.getBoundingClientRect().left, btn.getBoundingClientRect().top, '#00FFFF');
+                    // Ici : ouvrir modal de commentaire
+                    break;
+                    
+                case 'share':
+                    createStars(btn.getBoundingClientRect().left, btn.getBoundingClientRect().top, '#FFD700');
+                    if (navigator.share) {
+                        navigator.share({
+                            title: 'Regarde cette vidéo !',
+                            text: card.querySelector('.video-desc').textContent,
+                            url: window.location.href
+                        }).catch(() => {});
+                    }
+                    break;
+                    
+                case 'save':
+                    createStars(btn.getBoundingClientRect().left, btn.getBoundingClientRect().top, '#FFFFFF');
+                    btn.textContent = btn.textContent === '🔖' ? '✅' : '🔖';
+                    break;
+            }
+        }
+
+        // ✨ Effet étoiles magiques
+        function createStars(x, y, color = '#FFD700') {
+            for (let i = 0; i < 12; i++) {
+                const star = document.createElement('div');
+                star.className = 'magic-star';
+                star.textContent = ['✨', '⭐', '🌟', '💫'][Math.floor(Math.random() * 4)];
+                star.style.left = `${x}px`;
+                star.style.top = `${y}px`;
+                star.style.color = color;
+                
+                // Direction aléatoire
+                const tx = (Math.random() - 0.5) * 150 + 'px';
+                const ty = (Math.random() - 0.5) * 150 - 80 + 'px';
+                star.style.setProperty('--tx', tx);
+                star.style.setProperty('--ty', ty);
+                
+                document.body.appendChild(star);
+                setTimeout(() => star.remove(), 1000);
+            }
+        }
+
+        // 🔁 Mettre à jour quelle vidéo est visible (auto-play intelligent)
+        function updateVisibleVideo() {
+            const cards = document.querySelectorAll('.video-card');
+            const feed = document.getElementById('video-feed');
+            const feedRect = feed.getBoundingClientRect();
+
+            cards.forEach(card => {
+                const rect = card.getBoundingClientRect();
+                const video = card.querySelector('.video-player');
+                const isVisible = rect.top <= feedRect.height * 0.7 && rect.bottom >= feedRect.height * 0.3;
+
+                if (isVisible && video.paused) {
+                    // Pause les autres vidéos
+                    document.querySelectorAll('.video-player').forEach(v => {
+                        if (v !== video) {
+                            v.pause();
+                            v.closest('.video-card').classList.add('paused');
+                        }
+                    });
+                    
+                    // Play celle-ci
+                    video.play().catch(() => {
+                        card.classList.add('paused');
+                    });
+                }
+            });
+        }
+
+        // 📱 Gestes tactiles pour swipe vertical
+        function setupTouchGestures() {
+            const feed = document.getElementById('video-feed');
+            let startY = 0;
+            let currentY = 0;
+
+            feed.addEventListener('touchstart', (e) => {
+                startY = e.touches[0].clientY;
+            }, { passive: true });
+
+            feed.addEventListener('touchmove', (e) => {
+                currentY = e.touches[0].clientY;
+            }, { passive: true });
+
+            feed.addEventListener('touchend', () => {
+                const diff = startY - currentY;
+                if (Math.abs(diff) > 100) {
+                    // Swipe détecté ! Mettre à jour la vidéo visible
+                    setTimeout(updateVisibleVideo, 150);
+                }
+                startY = 0;
+                currentY = 0;
+            });
+
+            // Écouter le scroll normal aussi
+            feed.addEventListener('scroll', () => {
+                clearTimeout(window.scrollTimeout);
+                window.scrollTimeout = setTimeout(updateVisibleVideo, 100);
+            }, { passive: true });
+        }
+
+        // 🔢 Formatage des nombres (1.2k, 15M...)
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1) + 'k';
+            return num.toString();
+        }
+
+        // 🎨 Effet de vibration visuelle pour les appareils sans haptique
+        function triggerMagic(element, event) {
+            if (navigator.vibrate) navigator.vibrate(30);
+            
+            element.classList.add('shaking');
+            setTimeout(() => element.classList.remove('shaking'), 200);
+        }
+    </script>
+
+    </div>
+</body>
+</html>
